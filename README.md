@@ -140,7 +140,11 @@ but should be renamed to avoid confusion with the official project.
 
 ### Credit
 
+<<<<<<< HEAD
 Created and maintained by Moulaye El Hacen Hammony
+=======
+Created and maintained by Amadou SY
+>>>>>>> main
 ([Diondji SARL](https://diondji.work), Nouakchott).
 
 Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md).
@@ -256,7 +260,11 @@ le projet officiel.
 
 ### Credit
 
+<<<<<<< HEAD
 Cree et maintenu par Moulaye El Hacen Hammony
+=======
+Cree et maintenu par Amadou SY
+>>>>>>> main
 ([Diondji SARL](https://diondji.work), Nouakchott).
 
 Les contributions sont les bienvenues. Voir [CONTRIBUTING.md](./CONTRIBUTING.md).
