@@ -126,36 +126,40 @@ export default function MerchantOnboardingPage() {
           return;
         }
 
-        if (result.data) {
+        const { form: savedForm, documents } = result;
+
+        if (savedForm) {
           setForm(current => ({
             ...current,
-            name: result.data.name ?? current.name,
+            name: savedForm.name ?? current.name,
             legal_name:
-              result.data.legal_name ?? current.legal_name,
+              savedForm.legal_name ?? current.legal_name,
             business_type:
-              result.data.business_type ?? current.business_type,
+              savedForm.business_type ?? current.business_type,
             rc_number:
-              result.data.rc_number ?? current.rc_number,
-            nif: result.data.nif ?? current.nif,
+              savedForm.rc_number ?? current.rc_number,
+            nif: savedForm.nif ?? current.nif,
             contact_phone:
-              result.data.contact_phone ?? current.contact_phone,
-            address: result.data.address ?? current.address,
-            city: result.data.city ?? current.city,
+              savedForm.contact_phone ?? current.contact_phone,
+            address: savedForm.address ?? current.address,
+            city: savedForm.city ?? current.city,
             operator_method:
-              result.data.operator_method ??
+              savedForm.operator_method ??
               current.operator_method,
             operator_phone:
-              result.data.operator_phone ??
+              savedForm.operator_phone ??
               current.operator_phone,
             operator_label:
-              result.data.operator_label ??
+              savedForm.operator_label ??
               current.operator_label,
           }));
+        }
 
+        if (documents) {
           setFiles({
-            rc_url: result.data.rc_url ?? null,
-            nif_url: result.data.nif_url ?? null,
-            id_url: result.data.id_url ?? null,
+            rc_url: documents.rc_url ?? null,
+            nif_url: documents.nif_url ?? null,
+            id_url: documents.id_url ?? null,
           });
         }
       } catch (err) {
@@ -342,7 +346,9 @@ export default function MerchantOnboardingPage() {
 
         const result = await createKycUpload(
           key,
-          file.name
+          file.name,
+          file.type,
+          file.size
         );
 
         if (!result.ok || !result.path || !result.token) {
@@ -448,6 +454,13 @@ export default function MerchantOnboardingPage() {
 
       setFiles(uploaded);
 
+      const { rc_url, nif_url, id_url } = uploaded;
+
+      if (!rc_url || !nif_url || !id_url) {
+        setError('Les trois documents KYC sont obligatoires.');
+        return;
+      }
+
       const result = await submitOnboarding({
         name: form.name.trim(),
         legal_name: form.legal_name.trim(),
@@ -460,9 +473,10 @@ export default function MerchantOnboardingPage() {
         operator_method: form.operator_method,
         operator_phone: form.operator_phone.trim(),
         operator_label: form.operator_label.trim(),
-        rc_url: uploaded.rc_url,
-        nif_url: uploaded.nif_url,
-        id_url: uploaded.id_url,
+      }, {
+        rc_url,
+        nif_url,
+        id_url,
       });
 
       if (!result.ok) {
