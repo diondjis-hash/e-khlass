@@ -12,7 +12,11 @@ import {
   type KycDocumentKey,
 } from '@/lib/storage';
 
-const KYC_KEYS: KycDocumentKey[] = ['rc_url', 'nif_url', 'id_url'];
+const KYC_KEYS: KycDocumentKey[] = [
+  'rc_url',
+  'nif_url',
+  'id_url',
+];
 
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
@@ -51,19 +55,29 @@ async function getMerchantContext() {
   } = await supabase.auth.getUser();
 
   if (userErr || !user) {
-    return { error: 'Non authentifié' as const };
+    return {
+      error: 'Non authentifié' as const,
+    };
   }
 
-  const { data: members, error: memErr } = await supabase
+  const {
+    data: members,
+    error: memErr,
+  } = await supabase
     .from('merchant_members')
     .select('merchant_id')
     .eq('user_id', user.id)
     .eq('role', 'owner')
     .limit(1);
 
-  if (memErr || !members || members.length === 0) {
+  if (
+    memErr ||
+    !members ||
+    members.length === 0
+  ) {
     return {
-      error: 'Aucun merchant trouvé pour ce compte' as const,
+      error:
+        'Aucun merchant trouvé pour ce compte' as const,
     };
   }
 
@@ -72,6 +86,141 @@ async function getMerchantContext() {
   };
 }
 
+/*
+ * Charge les informations déjà enregistrées
+ * du marchand et de son opérateur.
+ */
+export async function loadOnboardingData(): Promise<{
+  ok: boolean;
+  form?: {
+    name: string | null;
+    legal_name: string | null;
+    business_type: string | null;
+    rc_number: string | null;
+    nif: string | null;
+    contact_phone: string | null;
+    address: string | null;
+    city: string | null;
+    operator_method: string | null;
+    operator_phone: string | null;
+    operator_label: string | null;
+  };
+  documents?: {
+    rc_url: string | null;
+    nif_url: string | null;
+    id_url: string | null;
+  };
+  error?: string;
+}> {
+  const context = await getMerchantContext();
+
+  if ('error' in context) {
+    return {
+      ok: false,
+      error: context.error,
+    };
+  }
+
+  const admin = createSupabaseAdminClient();
+
+  /*
+   * Récupération du marchand
+   */
+  const {
+    data: merchant,
+    error: merchantErr,
+  } = await admin
+    .from('merchants')
+    .select(`
+      name,
+      legal_name,
+      business_type,
+      rc_number,
+      nif,
+      contact_phone,
+      address,
+      city,
+      kyc_documents
+    `)
+    .eq('id', context.merchantId)
+    .maybeSingle();
+
+  if (merchantErr || !merchant) {
+    return {
+      ok: false,
+      error: 'Marchand introuvable.',
+    };
+  }
+
+  /*
+   * Récupération du premier opérateur actif.
+   */
+  const {
+    data: operator,
+    error: operatorErr,
+  } = await admin
+    .from('merchant_operators')
+    .select(
+      'method, expected_phone, label'
+    )
+    .eq('merchant_id', context.merchantId)
+    .eq('enabled', true)
+    .order('created_at', {
+      ascending: true,
+    })
+    .limit(1)
+    .maybeSingle();
+
+  if (operatorErr) {
+    return {
+      ok: false,
+      error:
+        `Impossible de charger l'opérateur : ${operatorErr.message}`,
+    };
+  }
+
+  /*
+   * Documents KYC existants.
+   */
+  const docs =
+    (merchant.kyc_documents as
+      | Record<string, string>
+      | null) ?? {};
+
+  return {
+    ok: true,
+
+    form: {
+      name: merchant.name,
+      legal_name: merchant.legal_name,
+      business_type: merchant.business_type,
+      rc_number: merchant.rc_number,
+      nif: merchant.nif,
+      contact_phone: merchant.contact_phone,
+      address: merchant.address,
+      city: merchant.city,
+
+      operator_method:
+        operator?.method ?? 'Bankily',
+
+      operator_phone:
+        operator?.expected_phone ?? '',
+
+      operator_label:
+        operator?.label ?? '',
+    },
+
+    documents: {
+      rc_url: docs.rc_url ?? null,
+      nif_url: docs.nif_url ?? null,
+      id_url: docs.id_url ?? null,
+    },
+  };
+}
+
+/*
+ * Prépare un upload KYC sécurisé.
+ */
 export async function createKycUpload(
   documentKey: KycDocumentKey,
   filename: string,
@@ -95,21 +244,27 @@ export async function createKycUpload(
   if (!KYC_KEYS.includes(documentKey)) {
     return {
       ok: false,
-      error: 'Type de document KYC invalide.',
+      error:
+        'Type de document KYC invalide.',
     };
   }
 
   if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
     return {
       ok: false,
-      error: 'Format accepté : PDF, JPG ou PNG.',
+      error:
+        'Format accepté : PDF, JPG ou PNG.',
     };
   }
 
-  if (!size || size > MAX_KYC_FILE_SIZE) {
+  if (
+    !size ||
+    size > MAX_KYC_FILE_SIZE
+  ) {
     return {
       ok: false,
-      error: 'Chaque document doit faire au maximum 10 Mo.',
+      error:
+        'Chaque document doit faire au maximum 10 Mo.',
     };
   }
 
@@ -120,6 +275,10 @@ export async function createKycUpload(
   );
 }
 
+/*
+ * Supprime uniquement les fichiers appartenant
+ * au marchand actuellement connecté.
+ */
 export async function cleanupKycUploads(
   paths: string[]
 ): Promise<{
@@ -135,13 +294,19 @@ export async function cleanupKycUploads(
     };
   }
 
-  const safePaths = paths.filter((path) =>
-    path.startsWith(`${context.merchantId}/`)
+  const safePaths = paths.filter(
+    (path) =>
+      path.startsWith(
+        `${context.merchantId}/`
+      )
   );
 
   return removeKycDocs(safePaths);
 }
 
+/*
+ * Enregistre le dossier marchand.
+ */
 export async function submitOnboarding(
   payload: OnboardingPayload,
   kycDocuments: KycDocuments
@@ -158,32 +323,46 @@ export async function submitOnboarding(
     };
   }
 
+  /*
+   * Vérification des trois documents.
+   */
   for (const key of KYC_KEYS) {
     const path = kycDocuments[key];
 
     if (
       !path ||
-      !path.startsWith(`${context.merchantId}/`)
+      !path.startsWith(
+        `${context.merchantId}/`
+      )
     ) {
       return {
         ok: false,
-        error: 'Les trois documents KYC sont obligatoires.',
+        error:
+          'Les trois documents KYC sont obligatoires.',
       };
     }
   }
 
   const admin = createSupabaseAdminClient();
 
+  /*
+   * Récupération du marchand actuel.
+   */
   const {
     data: currentMerchant,
     error: currentErr,
   } = await admin
     .from('merchants')
-    .select('status, kyc_verified_at')
+    .select(
+      'status, kyc_verified_at'
+    )
     .eq('id', context.merchantId)
     .maybeSingle();
 
-  if (currentErr || !currentMerchant) {
+  if (
+    currentErr ||
+    !currentMerchant
+  ) {
     return {
       ok: false,
       error: 'Marchand introuvable.',
@@ -191,20 +370,36 @@ export async function submitOnboarding(
   }
 
   const isAlreadyVerified =
-    Boolean(currentMerchant.kyc_verified_at);
+    Boolean(
+      currentMerchant.kyc_verified_at
+    );
 
-  const { error: updateErr } = await admin
+  /*
+   * Mise à jour du marchand.
+   */
+  const {
+    error: updateErr,
+  } = await admin
     .from('merchants')
     .update({
       name: payload.name,
-      legal_name: payload.legal_name || null,
-      business_type: payload.business_type || null,
-      rc_number: payload.rc_number || null,
-      nif: payload.nif || null,
-      contact_phone: payload.contact_phone || null,
-      address: payload.address || null,
-      city: payload.city || 'Nouakchott',
-      kyc_documents: kycDocuments,
+      legal_name:
+        payload.legal_name || null,
+      business_type:
+        payload.business_type || null,
+      rc_number:
+        payload.rc_number || null,
+      nif:
+        payload.nif || null,
+      contact_phone:
+        payload.contact_phone || null,
+      address:
+        payload.address || null,
+      city:
+        payload.city || 'Nouakchott',
+
+      kyc_documents:
+        kycDocuments,
 
       ...(isAlreadyVerified
         ? {}
@@ -214,40 +409,141 @@ export async function submitOnboarding(
             kyc_notes: null,
           }),
 
-      updated_at: new Date().toISOString(),
+      updated_at:
+        new Date().toISOString(),
     })
-    .eq('id', context.merchantId);
+    .eq(
+      'id',
+      context.merchantId
+    );
 
   if (updateErr) {
     return {
       ok: false,
-      error: `Update merchant failed: ${updateErr.message}`,
+      error:
+        `Update merchant failed: ${updateErr.message}`,
     };
   }
 
-  const phoneClean = payload.operator_phone.replace(/\s+/g, '');
+  /*
+   * Nettoyage du numéro opérateur.
+   */
+  const phoneClean =
+    payload.operator_phone.replace(
+      /\s+/g,
+      ''
+    );
 
-  const { error: opErr } = await admin
+  /*
+   * Vérifie si un opérateur existe déjà.
+   */
+  const {
+    data: existingOperator,
+    error: existingOperatorErr,
+  } = await admin
     .from('merchant_operators')
-    .insert({
-      merchant_id: context.merchantId,
-      method: payload.operator_method,
-      expected_phone: phoneClean,
-      label:
-        payload.operator_label ||
-        `${payload.operator_method} principal`,
-      enabled: true,
-    });
+    .select(
+      'id'
+    )
+    .eq(
+      'merchant_id',
+      context.merchantId
+    )
+    .eq(
+      'enabled',
+      true
+    )
+    .order('created_at', {
+      ascending: true,
+    })
+    .limit(1)
+    .maybeSingle();
 
-  if (opErr && !opErr.message.includes('duplicate')) {
+  if (existingOperatorErr) {
     return {
       ok: false,
-      error: `Insert operator failed: ${opErr.message}`,
+      error:
+        `Lecture opérateur échouée : ${existingOperatorErr.message}`,
     };
   }
 
+  /*
+   * Si l'opérateur existe :
+   * UPDATE au lieu de INSERT.
+   */
+  if (existingOperator) {
+    const {
+      error: opUpdateErr,
+    } = await admin
+      .from('merchant_operators')
+      .update({
+        method:
+          payload.operator_method,
+
+        expected_phone:
+          phoneClean,
+
+        label:
+          payload.operator_label ||
+          `${payload.operator_method} principal`,
+
+        enabled: true,
+      })
+      .eq(
+        'id',
+        existingOperator.id
+      );
+
+    if (opUpdateErr) {
+      return {
+        ok: false,
+        error:
+          `Update operator failed: ${opUpdateErr.message}`,
+      };
+    }
+  } else {
+    /*
+     * Aucun opérateur existant :
+     * création du premier opérateur.
+     */
+    const {
+      error: opInsertErr,
+    } = await admin
+      .from('merchant_operators')
+      .insert({
+        merchant_id:
+          context.merchantId,
+
+        method:
+          payload.operator_method,
+
+        expected_phone:
+          phoneClean,
+
+        label:
+          payload.operator_label ||
+          `${payload.operator_method} principal`,
+
+        enabled: true,
+      });
+
+    if (opInsertErr) {
+      return {
+        ok: false,
+        error:
+          `Insert operator failed: ${opInsertErr.message}`,
+      };
+    }
+  }
+
+  /*
+   * Rafraîchissement des pages concernées.
+   */
   revalidatePath('/admin/kyc');
   revalidatePath('/dashboard');
+  revalidatePath(
+    '/onboarding/merchant'
+  );
 
   return {
     ok: true,
