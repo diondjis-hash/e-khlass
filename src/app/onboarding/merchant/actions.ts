@@ -56,7 +56,7 @@ async function getMerchantContext() {
 
   if (userErr || !user) {
     return {
-      error: 'Non authentifié' as const,
+      error: 'Non authentifie' as const,
     };
   }
 
@@ -70,14 +70,9 @@ async function getMerchantContext() {
     .eq('role', 'owner')
     .limit(1);
 
-  if (
-    memErr ||
-    !members ||
-    members.length === 0
-  ) {
+  if (memErr || !members || members.length === 0) {
     return {
-      error:
-        'Aucun merchant trouvé pour ce compte' as const,
+      error: 'Aucun merchant trouve pour ce compte' as const,
     };
   }
 
@@ -86,10 +81,6 @@ async function getMerchantContext() {
   };
 }
 
-/*
- * Charge les informations déjà enregistrées
- * du marchand et de son opérateur.
- */
 export async function loadOnboardingData(): Promise<{
   ok: boolean;
   form?: {
@@ -123,9 +114,6 @@ export async function loadOnboardingData(): Promise<{
 
   const admin = createSupabaseAdminClient();
 
-  /*
-   * Récupération du marchand
-   */
   const {
     data: merchant,
     error: merchantErr,
@@ -152,17 +140,12 @@ export async function loadOnboardingData(): Promise<{
     };
   }
 
-  /*
-   * Récupération du premier opérateur actif.
-   */
   const {
     data: operator,
     error: operatorErr,
   } = await admin
     .from('merchant_operators')
-    .select(
-      'method, expected_phone, label'
-    )
+    .select('method, expected_phone, label')
     .eq('merchant_id', context.merchantId)
     .eq('enabled', true)
     .order('created_at', {
@@ -174,22 +157,15 @@ export async function loadOnboardingData(): Promise<{
   if (operatorErr) {
     return {
       ok: false,
-      error:
-        `Impossible de charger l'opérateur : ${operatorErr.message}`,
+      error: `Impossible de charger l'operateur : ${operatorErr.message}`,
     };
   }
 
-  /*
-   * Documents KYC existants.
-   */
   const docs =
-    (merchant.kyc_documents as
-      | Record<string, string>
-      | null) ?? {};
+    (merchant.kyc_documents as Record<string, string> | null) ?? {};
 
   return {
     ok: true,
-
     form: {
       name: merchant.name,
       legal_name: merchant.legal_name,
@@ -199,17 +175,10 @@ export async function loadOnboardingData(): Promise<{
       contact_phone: merchant.contact_phone,
       address: merchant.address,
       city: merchant.city,
-
-      operator_method:
-        operator?.method ?? 'Bankily',
-
-      operator_phone:
-        operator?.expected_phone ?? '',
-
-      operator_label:
-        operator?.label ?? '',
+      operator_method: operator?.method ?? 'Bankily',
+      operator_phone: operator?.expected_phone ?? '',
+      operator_label: operator?.label ?? '',
     },
-
     documents: {
       rc_url: docs.rc_url ?? null,
       nif_url: docs.nif_url ?? null,
@@ -218,9 +187,6 @@ export async function loadOnboardingData(): Promise<{
   };
 }
 
-/*
- * Prépare un upload KYC sécurisé.
- */
 export async function createKycUpload(
   documentKey: KycDocumentKey,
   filename: string,
@@ -244,27 +210,21 @@ export async function createKycUpload(
   if (!KYC_KEYS.includes(documentKey)) {
     return {
       ok: false,
-      error:
-        'Type de document KYC invalide.',
+      error: 'Type de document KYC invalide.',
     };
   }
 
   if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
     return {
       ok: false,
-      error:
-        'Format accepté : PDF, JPG ou PNG.',
+      error: 'Format accepte : PDF, JPG ou PNG.',
     };
   }
 
-  if (
-    !size ||
-    size > MAX_KYC_FILE_SIZE
-  ) {
+  if (!size || size > MAX_KYC_FILE_SIZE) {
     return {
       ok: false,
-      error:
-        'Chaque document doit faire au maximum 10 Mo.',
+      error: 'Chaque document doit faire au maximum 10 Mo.',
     };
   }
 
@@ -275,10 +235,6 @@ export async function createKycUpload(
   );
 }
 
-/*
- * Supprime uniquement les fichiers appartenant
- * au marchand actuellement connecté.
- */
 export async function cleanupKycUploads(
   paths: string[]
 ): Promise<{
@@ -294,19 +250,15 @@ export async function cleanupKycUploads(
     };
   }
 
-  const safePaths = paths.filter(
-    (path) =>
-      path.startsWith(
-        `${context.merchantId}/`
-      )
+  const prefix = `${context.merchantId}/`;
+
+  const safePaths = paths.filter((path) =>
+    path.startsWith(prefix)
   );
 
   return removeKycDocs(safePaths);
 }
 
-/*
- * Enregistre le dossier marchand.
- */
 export async function submitOnboarding(
   payload: OnboardingPayload,
   kycDocuments: KycDocuments
@@ -323,84 +275,54 @@ export async function submitOnboarding(
     };
   }
 
-  /*
-   * Vérification des trois documents.
-   */
   for (const key of KYC_KEYS) {
     const path = kycDocuments[key];
 
     if (
       !path ||
-      !path.startsWith(
-        `${context.merchantId}/`
-      )
+      !path.startsWith(`${context.merchantId}/`)
     ) {
       return {
         ok: false,
-        error:
-          'Les trois documents KYC sont obligatoires.',
+        error: 'Les trois documents KYC sont obligatoires.',
       };
     }
   }
 
   const admin = createSupabaseAdminClient();
 
-  /*
-   * Récupération du marchand actuel.
-   */
   const {
     data: currentMerchant,
     error: currentErr,
   } = await admin
     .from('merchants')
-    .select(
-      'status, kyc_verified_at'
-    )
+    .select('status, kyc_verified_at')
     .eq('id', context.merchantId)
     .maybeSingle();
 
-  if (
-    currentErr ||
-    !currentMerchant
-  ) {
+  if (currentErr || !currentMerchant) {
     return {
       ok: false,
       error: 'Marchand introuvable.',
     };
   }
 
-  const isAlreadyVerified =
-    Boolean(
-      currentMerchant.kyc_verified_at
-    );
+  const isAlreadyVerified = Boolean(
+    currentMerchant.kyc_verified_at
+  );
 
-  /*
-   * Mise à jour du marchand.
-   */
-  const {
-    error: updateErr,
-  } = await admin
+  const { error: updateErr } = await admin
     .from('merchants')
     .update({
       name: payload.name,
-      legal_name:
-        payload.legal_name || null,
-      business_type:
-        payload.business_type || null,
-      rc_number:
-        payload.rc_number || null,
-      nif:
-        payload.nif || null,
-      contact_phone:
-        payload.contact_phone || null,
-      address:
-        payload.address || null,
-      city:
-        payload.city || 'Nouakchott',
-
-      kyc_documents:
-        kycDocuments,
-
+      legal_name: payload.legal_name || null,
+      business_type: payload.business_type || null,
+      rc_number: payload.rc_number || null,
+      nif: payload.nif || null,
+      contact_phone: payload.contact_phone || null,
+      address: payload.address || null,
+      city: payload.city || 'Nouakchott',
+      kyc_documents: kycDocuments,
       ...(isAlreadyVerified
         ? {}
         : {
@@ -408,51 +330,30 @@ export async function submitOnboarding(
             kyc_verified_at: null,
             kyc_notes: null,
           }),
-
-      updated_at:
-        new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     })
-    .eq(
-      'id',
-      context.merchantId
-    );
+    .eq('id', context.merchantId);
 
   if (updateErr) {
     return {
       ok: false,
-      error:
-        `Update merchant failed: ${updateErr.message}`,
+      error: `Update merchant failed: ${updateErr.message}`,
     };
   }
 
-  /*
-   * Nettoyage du numéro opérateur.
-   */
-  const phoneClean =
-    payload.operator_phone.replace(
-      /\s+/g,
-      ''
-    );
+  const phoneClean = payload.operator_phone.replace(
+    /\s+/g,
+    ''
+  );
 
-  /*
-   * Vérifie si un opérateur existe déjà.
-   */
   const {
     data: existingOperator,
     error: existingOperatorErr,
   } = await admin
     .from('merchant_operators')
-    .select(
-      'id'
-    )
-    .eq(
-      'merchant_id',
-      context.merchantId
-    )
-    .eq(
-      'enabled',
-      true
-    )
+    .select('id')
+    .eq('merchant_id', context.merchantId)
+    .eq('enabled', true)
     .order('created_at', {
       ascending: true,
     })
@@ -462,88 +363,50 @@ export async function submitOnboarding(
   if (existingOperatorErr) {
     return {
       ok: false,
-      error:
-        `Lecture opérateur échouée : ${existingOperatorErr.message}`,
+      error: `Lecture operateur echouee : ${existingOperatorErr.message}`,
     };
   }
 
-  /*
-   * Si l'opérateur existe :
-   * UPDATE au lieu de INSERT.
-   */
+  const operatorData = {
+    method: payload.operator_method,
+    expected_phone: phoneClean,
+    label:
+      payload.operator_label ||
+      `${payload.operator_method} principal`,
+    enabled: true,
+  };
+
   if (existingOperator) {
-    const {
-      error: opUpdateErr,
-    } = await admin
+    const { error: opUpdateErr } = await admin
       .from('merchant_operators')
-      .update({
-        method:
-          payload.operator_method,
-
-        expected_phone:
-          phoneClean,
-
-        label:
-          payload.operator_label ||
-          `${payload.operator_method} principal`,
-
-        enabled: true,
-      })
-      .eq(
-        'id',
-        existingOperator.id
-      );
+      .update(operatorData)
+      .eq('id', existingOperator.id);
 
     if (opUpdateErr) {
       return {
         ok: false,
-        error:
-          `Update operator failed: ${opUpdateErr.message}`,
+        error: `Update operator failed: ${opUpdateErr.message}`,
       };
     }
   } else {
-    /*
-     * Aucun opérateur existant :
-     * création du premier opérateur.
-     */
-    const {
-      error: opInsertErr,
-    } = await admin
+    const { error: opInsertErr } = await admin
       .from('merchant_operators')
       .insert({
-        merchant_id:
-          context.merchantId,
-
-        method:
-          payload.operator_method,
-
-        expected_phone:
-          phoneClean,
-
-        label:
-          payload.operator_label ||
-          `${payload.operator_method} principal`,
-
-        enabled: true,
+        merchant_id: context.merchantId,
+        ...operatorData,
       });
 
     if (opInsertErr) {
       return {
         ok: false,
-        error:
-          `Insert operator failed: ${opInsertErr.message}`,
+        error: `Insert operator failed: ${opInsertErr.message}`,
       };
     }
   }
 
-  /*
-   * Rafraîchissement des pages concernées.
-   */
   revalidatePath('/admin/kyc');
   revalidatePath('/dashboard');
-  revalidatePath(
-    '/onboarding/merchant'
-  );
+  revalidatePath('/onboarding/merchant');
 
   return {
     ok: true,
