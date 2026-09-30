@@ -25,7 +25,40 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   const merchant = (members[0] as any).merchants;
+  if (merchant?.status !== 'active') {
+  return (
+    <div className="min-h-screen bg-[var(--paper)]">
+      <div className="mx-auto flex min-h-screen max-w-xl items-center px-6 py-12">
+        <div className="w-full rounded-sm border border-[var(--stone-200)] bg-white p-6 shadow-sm sm:p-8">
+          <p className="kp-eyebrow text-[var(--bronze)] mb-3">
+            — Vérification du compte
+          </p>
 
+          <h1 className="kp-section-title text-[var(--ink)]">
+            KYC <em>en attente</em>
+          </h1>
+
+          <p className="mt-4 text-sm leading-relaxed text-[var(--stone-700)]">
+            Votre dossier marchand a bien été reçu. Notre équipe doit
+            vérifier vos informations et vos documents avant l’activation
+            complète de votre compte.
+          </p>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              href="/onboarding/merchant"
+              className="kp-btn kp-btn-primary text-xs"
+            >
+              Voir / modifier mon dossier →
+            </Link>
+
+            <SignOutButton />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
   return (
     <div className="min-h-screen bg-[var(--paper)]">
       <aside className="fixed inset-y-0 left-0 w-64 border-r border-[var(--stone-200)] bg-[var(--paper)] flex flex-col">
