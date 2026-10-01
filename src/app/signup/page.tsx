@@ -89,7 +89,7 @@ export default function SignupPage() {
             <AuthForm
               action={signupWithEmail}
               ctaLabel="Créer mon compte"
-              successMessage="Cliquez sur le lien magique dans l’email pour activer votre compte et démarrer l’onboarding."
+              successMessage="Cliquez sur le lien magique dans l'email pour activer votre compte et démarrer l'onboarding."
             />
 
             <div className="mt-7 pt-6 border-t border-[var(--stone-200)] text-center">
