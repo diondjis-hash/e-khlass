@@ -35,7 +35,7 @@ export default function LoginPage() {
             <p className="mt-7 text-[15px] leading-relaxed text-[var(--stone-600)] max-w-md">
               Aucun mot de passe à retenir. Saisissez votre email, recevez un lien
               magique, accédez immédiatement à votre dashboard, vos clés API, vos
-              webhooks et l’historique de vos paiements.
+              webhooks et l'historique de vos paiements.
             </p>
           </div>
 
@@ -88,7 +88,7 @@ export default function LoginPage() {
           </div>
 
           <p className="mt-6 text-center text-[12px] text-[var(--stone-500)]">
-            En vous connectant, vous acceptez nos conditions d’utilisation.
+            En vous connectant, vous acceptez nos conditions d'utilisation.
           </p>
         </section>
       </div>

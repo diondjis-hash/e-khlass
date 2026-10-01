@@ -40,7 +40,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
           <p className="mt-4 text-sm leading-relaxed text-[var(--stone-700)]">
             Votre dossier marchand a bien été reçu. Notre équipe doit
-            vérifier vos informations et vos documents avant l’activation
+            vérifier vos informations et vos documents avant l'activation
             complète de votre compte.
           </p>
 
